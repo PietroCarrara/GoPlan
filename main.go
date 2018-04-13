@@ -40,7 +40,7 @@ var focusedStyle = tui.Style{
 
 func main() {
 
-	// Setup()
+	Setup()
 
 	// Little hack to gather user input
 	// from <key>, not from Ctrl-<key>
@@ -109,12 +109,7 @@ func main() {
 }
 
 func Setup() {
-	entries := []*Entry{{"Adicionar referências"}, {"Ler artigos"}}
-	entries2 := []*Entry{{"Corrigir posição do mapa"}, {"Implementar heróis"}}
-
-	tasks := []*Task{{"Escrever anexo II", entries}, {"Implementar fases", entries2}}
-
-	projects = []*Project{{"Code Overlord", tasks}}
+	projects = LoadFile()
 }
 
 func ProjectChanged(l *tui.List) {
@@ -173,10 +168,12 @@ var inChan = make(chan string)
 
 func Input(e *tui.Entry) {
 
-	text := e.Text()
+	go input(e.Text())
 
 	e.SetText("")
+}
 
+func input(text string) {
 	if currentMode != Insert {
 		inChan <- ""
 	} else {
@@ -200,6 +197,7 @@ func command(s string) bool {
 		nextSector()
 		add()
 	case "q":
+		SaveFile(projects)
 		ui.Quit()
 	case "l":
 		nextSector()
