@@ -9,8 +9,12 @@ import (
 // Main ui
 var ui tui.UI
 
-// Screen sectors
+// Screen sectors and their lists
+var boxes [3]*tui.Box
 var sectors [3]*tui.List
+
+// Sector names
+var names [3]string = [3]string{"Projects", "Tasks", "Entries"}
 
 // Projects (which includes tasks, that includes entries)
 var projects []*Project
@@ -29,6 +33,10 @@ const (
 )
 
 var currentMode = Normal
+
+var focusedStyle = tui.Style{
+	Bold: tui.DecorationOn,
+}
 
 func main() {
 
@@ -51,26 +59,26 @@ func main() {
 	sectors[0] = tui.NewList()
 	sectors[0].SetFocused(true)
 	sectors[0].OnSelectionChanged(ProjectChanged)
-	projectsBox := tui.NewVBox(sectors[0])
-	projectsBox.SetTitle("Projects")
-	projectsBox.SetBorder(true)
-	projectsBox.SetFocused(true)
+	boxes[0] = tui.NewVBox(sectors[0])
+	boxes[0].SetTitle("Projects")
+	boxes[0].SetBorder(true)
+	boxes[0].SetFocused(true)
 	for _, val := range projects {
 		sectors[0].AddItems(val.Name)
 	}
 
 	sectors[1] = tui.NewList()
 	sectors[1].OnSelectionChanged(TaskChanged)
-	tasksBox := tui.NewVBox(sectors[1])
-	tasksBox.SetTitle("Tasks")
-	tasksBox.SetBorder(true)
+	boxes[1] = tui.NewVBox(sectors[1])
+	boxes[1].SetTitle("Tasks")
+	boxes[1].SetBorder(true)
 
 	sectors[2] = tui.NewList()
-	entryBox := tui.NewVBox(sectors[2])
-	entryBox.SetTitle("Entries")
-	entryBox.SetBorder(true)
+	boxes[2] = tui.NewVBox(sectors[2])
+	boxes[2].SetTitle("Entries")
+	boxes[2].SetBorder(true)
 
-	sectorsBox := tui.NewHBox(projectsBox, tasksBox, entryBox)
+	sectorsBox := tui.NewHBox(boxes[0], boxes[1], boxes[2])
 
 	root := tui.NewVBox(sectorsBox, inputBox)
 
@@ -92,6 +100,8 @@ func main() {
 	if len(projects) > 0 {
 		sectors[0].Select(0)
 	}
+
+	prevSector()
 
 	if err := ui.Run(); err != nil {
 		log.Fatal(err)
@@ -289,6 +299,7 @@ func addEntry() {
 
 func nextSector() {
 	sectors[sectorIndex].SetFocused(false)
+	boxes[sectorIndex].SetTitle(names[sectorIndex])
 
 	sectorIndex++
 
@@ -297,10 +308,12 @@ func nextSector() {
 	}
 
 	sectors[sectorIndex].SetFocused(true)
+	boxes[sectorIndex].SetTitle("!!" + names[sectorIndex] + "!!")
 }
 
 func prevSector() {
 	sectors[sectorIndex].SetFocused(false)
+	boxes[sectorIndex].SetTitle(names[sectorIndex])
 
 	sectorIndex--
 
@@ -309,4 +322,5 @@ func prevSector() {
 	}
 
 	sectors[sectorIndex].SetFocused(true)
+	boxes[sectorIndex].SetTitle("!!" + names[sectorIndex] + "!!")
 }
