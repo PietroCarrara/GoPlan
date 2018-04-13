@@ -1,41 +1,52 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"time"
 
 	"github.com/marcusolsson/tui-go"
 )
 
-type post struct {
-	username string
-	message  string
-	time     string
-}
-
-var posts = []post{
-	{username: "john", message: "hi, what's up?", time: "14:41"},
-	{username: "jane", message: "not much", time: "14:43"},
-}
-
+// Main ui
 var ui tui.UI
 
+// Screen sectors
 var sectors [3]*tui.List
 
+// Projects (which includes tasks, that includes entries)
 var projects []*Project
 
+// Which sector (Projects, Tasks...) is selected
 var sectorIndex = 0
+
+// Label before input box
+var inputLabel *tui.Label
+
+type Mode int
+
+const (
+	Insert Mode = iota
+	Normal
+)
+
+var currentMode = Normal
 
 func main() {
 
-	Setup()
+	// Setup()
 
 	// Little hack to gather user input
 	// from <key>, not from Ctrl-<key>
 	input := tui.NewEntry()
 	input.SetFocused(true)
 	input.SetSizePolicy(tui.Expanding, tui.Maximum)
+
+	input.OnSubmit(Input)
+
+	inputLabel = tui.NewLabel("")
+	// inputLabel.SetSizePolicy(tui.Expanding, tui.Maximum)
+
+	inputBox := tui.NewHBox(inputLabel, input)
+	inputBox.SetSizePolicy(tui.Expanding, tui.Maximum)
 
 	sectors[0] = tui.NewList()
 	sectors[0].SetFocused(true)
@@ -61,7 +72,7 @@ func main() {
 
 	sectorsBox := tui.NewHBox(projectsBox, tasksBox, entryBox)
 
-	root := tui.NewVBox(sectorsBox, input)
+	root := tui.NewVBox(sectorsBox, inputBox)
 
 	var err error
 
@@ -78,7 +89,9 @@ func main() {
 
 	ui.SetKeybinding("Esc", func() { input.SetText("") })
 
-	sectors[0].Select(0)
+	if len(projects) > 0 {
+		sectors[0].Select(0)
+	}
 
 	if err := ui.Run(); err != nil {
 		log.Fatal(err)
@@ -103,6 +116,15 @@ func ProjectChanged(l *tui.List) {
 	// Clear tasks
 	sectors[1].RemoveItems()
 
+	if len(projects[l.Selected()].Tasks) <= 0 {
+
+		for _, sec := range sectors[2:] {
+			sec.RemoveItems()
+		}
+
+		return
+	}
+
 	// Foreach task in the current project...
 	for _, val := range projects[l.Selected()].Tasks {
 		sectors[1].AddItems(val.Name)
@@ -120,6 +142,15 @@ func TaskChanged(l *tui.List) {
 	// Clear entries
 	sectors[2].RemoveItems()
 
+	if len(projects[sectors[0].Selected()].Tasks[l.Selected()].Entries) <= 0 {
+
+		for _, sec := range sectors[3:] {
+			sec.RemoveItems()
+		}
+
+		return
+	}
+
 	// Foreach entry in the current task, in the current project...
 	for _, val := range projects[sectors[0].Selected()].Tasks[l.Selected()].Entries {
 		sectors[2].AddItems(val.Name)
@@ -128,8 +159,36 @@ func TaskChanged(l *tui.List) {
 	sectors[2].Select(0)
 }
 
+var inChan = make(chan string)
+
+func Input(e *tui.Entry) {
+
+	text := e.Text()
+
+	e.SetText("")
+
+	if currentMode != Insert {
+		inChan <- ""
+	} else {
+		inChan <- text
+	}
+}
+
+// Runs the command 's', and returns true
+// if 's' was a valid command string
 func command(s string) bool {
+
+	// If we are not in Normal, don't do anything
+	if currentMode != Normal {
+		return false
+	}
+
 	switch s {
+	case "a":
+		add()
+	case "A":
+		nextSector()
+		add()
 	case "q":
 		ui.Quit()
 	case "l":
@@ -143,7 +202,89 @@ func command(s string) bool {
 	default:
 		return false
 	}
+
+	// If we're here, we didn't got into the
+	// default case, so a command has been run
 	return true
+}
+
+func add() {
+
+	currentMode = Insert
+
+	switch sectorIndex {
+	case 0:
+		inputLabel.SetText("Project Name: ")
+		go addProject()
+	case 1:
+		inputLabel.SetText("Task Name: ")
+		go addTask()
+	case 2:
+		inputLabel.SetText("Entry Name: ")
+		go addEntry()
+	}
+}
+
+func addProject() {
+
+	proj := NewProject(<-inChan, nil)
+
+	inputLabel.SetText("")
+	currentMode = Normal
+
+	if proj.Name == "" {
+		return
+	}
+
+	projects = append(projects, proj)
+
+	sectors[0].AddItems(proj.Name)
+
+	sectors[0].Select(sectors[0].Length() - 1)
+}
+
+func addTask() {
+
+	task := NewTask(<-inChan, nil)
+
+	inputLabel.SetText("")
+	currentMode = Normal
+
+	if task.Name == "" {
+		return
+	}
+
+	if sectors[0].Selected() < 0 {
+		return
+	}
+
+	parent := projects[sectors[0].Selected()]
+
+	parent.Tasks = append(parent.Tasks, task)
+
+	sectors[1].AddItems(task.Name)
+
+	sectors[1].Select(sectors[1].Length() - 1)
+}
+
+func addEntry() {
+
+	entry := NewEntry(<-inChan)
+
+	inputLabel.SetText("")
+	currentMode = Normal
+
+	if entry.Name == "" {
+		return
+	}
+
+	parent := projects[sectors[0].Selected()].Tasks[sectors[1].Selected()]
+
+	parent.Entries = append(parent.Entries, entry)
+
+	sectors[2].AddItems(entry.Name)
+
+	sectors[2].Select(sectors[2].Length() - 1)
 }
 
 func nextSector() {
@@ -168,68 +309,4 @@ func prevSector() {
 	}
 
 	sectors[sectorIndex].SetFocused(true)
-}
-
-func sample() {
-	sidebar := tui.NewVBox(
-		tui.NewLabel("CHANNELS"),
-		tui.NewLabel("general"),
-		tui.NewLabel("random"),
-		tui.NewLabel(""),
-		tui.NewLabel("DIRECT MESSAGES"),
-		tui.NewLabel("slackbot"),
-		tui.NewSpacer(),
-	)
-	sidebar.SetBorder(true)
-
-	history := tui.NewVBox()
-
-	for _, m := range posts {
-		history.Append(tui.NewHBox(
-			tui.NewLabel(m.time),
-			tui.NewPadder(1, 0, tui.NewLabel(fmt.Sprintf("<%s>", m.username))),
-			tui.NewLabel(m.message),
-			tui.NewSpacer(),
-		))
-	}
-
-	historyScroll := tui.NewScrollArea(history)
-	historyScroll.SetAutoscrollToBottom(true)
-
-	historyBox := tui.NewVBox(historyScroll)
-	historyBox.SetBorder(true)
-
-	input := tui.NewEntry()
-	input.SetFocused(true)
-	input.SetSizePolicy(tui.Expanding, tui.Maximum)
-
-	inputBox := tui.NewHBox(input)
-	inputBox.SetBorder(true)
-	inputBox.SetSizePolicy(tui.Expanding, tui.Maximum)
-
-	chat := tui.NewVBox(historyBox, inputBox)
-	chat.SetSizePolicy(tui.Expanding, tui.Expanding)
-
-	input.OnSubmit(func(e *tui.Entry) {
-		history.Append(tui.NewHBox(
-			tui.NewLabel(time.Now().Format("15:04")),
-			tui.NewPadder(1, 0, tui.NewLabel(fmt.Sprintf("<%s>", "john"))),
-			tui.NewLabel(e.Text()),
-			tui.NewSpacer(),
-		))
-		input.SetText("")
-	})
-
-	root := tui.NewHBox(sidebar, chat)
-
-	ui, err := tui.New(root)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	ui.SetKeybinding("Esc", func() { ui.Quit() })
-
-	if err := ui.Run(); err != nil {
-		log.Fatal(err)
-	}
 }
