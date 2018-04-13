@@ -158,7 +158,7 @@ func TaskChanged(l *tui.List) {
 
 	// Foreach entry in the current task, in the current project...
 	for _, val := range projects[sectors[0].Selected()].Tasks[l.Selected()].Entries {
-		sectors[2].AddItems(val.Name)
+		sectors[2].AddItems(val.String())
 	}
 
 	sectors[2].Select(0)
@@ -199,6 +199,8 @@ func command(s string) bool {
 	case "q":
 		SaveFile(projects)
 		ui.Quit()
+	case "x":
+		complete()
 	case "l":
 		nextSector()
 	case "h":
@@ -290,19 +292,44 @@ func addEntry() {
 
 	parent.Entries = append(parent.Entries, entry)
 
-	sectors[2].AddItems(entry.Name)
+	sectors[2].AddItems(entry.String())
 
 	sectors[2].Select(sectors[2].Length() - 1)
+}
+
+func complete() {
+	index1, index2, index3 := sectors[0].Selected(), sectors[1].Selected(), sectors[2].Selected()
+
+	if index1 < 0 || index2 < 0 || index3 < 0 {
+		return
+	}
+
+	entries := projects[index1].Tasks[index2].Entries
+
+	entries[index3].Completed = !entries[index3].Completed
+
+	for i := index3; i < sectors[2].Length(); i++ {
+		sectors[2].RemoveItem(index3)
+
+		sectors[2].AddItems(entries[i].String())
+	}
+
+	sectors[2].Select(index3)
 }
 
 func nextSector() {
 	sectors[sectorIndex].SetFocused(false)
 	boxes[sectorIndex].SetTitle(names[sectorIndex])
 
-	sectorIndex++
+	newIndex := sectorIndex + 1
 
-	if sectorIndex >= len(sectors) {
-		sectorIndex = len(sectors) - 1
+	if newIndex >= len(sectors) {
+		newIndex = len(sectors) - 1
+	}
+
+	// Only advence if there are things there
+	if sectors[newIndex].Length() > 0 {
+		sectorIndex = newIndex
 	}
 
 	sectors[sectorIndex].SetFocused(true)
