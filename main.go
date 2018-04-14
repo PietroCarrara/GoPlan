@@ -194,7 +194,7 @@ func command(s string) bool {
 	case "a":
 		add()
 	case "A":
-		nextSector()
+		nextSector(true)
 		add()
 	case "q":
 		SaveFile(projects)
@@ -202,7 +202,7 @@ func command(s string) bool {
 	case "x":
 		complete()
 	case "l":
-		nextSector()
+		nextSector(false)
 	case "h":
 		prevSector()
 	case "j":
@@ -317,7 +317,7 @@ func complete() {
 	sectors[2].Select(index3)
 }
 
-func nextSector() {
+func nextSector(force bool) {
 	sectors[sectorIndex].SetFocused(false)
 	boxes[sectorIndex].SetTitle(names[sectorIndex])
 
@@ -327,8 +327,9 @@ func nextSector() {
 		newIndex = len(sectors) - 1
 	}
 
-	// Only advence if there are things there
-	if sectors[newIndex].Length() > 0 {
+	// Only advance if there are things there
+	// or we have been forced to
+	if sectors[newIndex].Length() > 0 || force {
 		sectorIndex = newIndex
 	}
 
